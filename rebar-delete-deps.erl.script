@@ -1,0 +1,20 @@
+File = "rebar.config.script.old",
+
+%% Source: https://github.com/rebar/rebar/commit/b3e9e76f57c9b9efbfe26e3a7330b27ff13c8c20
+
+Fbs = fun (Vars) ->
+    lists:foldl(fun({K,V}, Bs) ->
+                        erl_eval:add_binding(K, V, Bs)
+                end, erl_eval:new_bindings(), Vars)
+    end,
+
+C0 = case filelib:is_regular(File) of
+  true ->
+    Bindings = [{'CONFIG', CONFIG}, {'SCRIPT', SCRIPT}],
+    {ok, Config} = file:script(File, erlang:apply(Fbs, [Bindings])),
+    Config;
+  false -> CONFIG
+  end,
+C1 = lists:keystore(deps, 1, C0, {deps, []}),
+C2 = lists:keystore(project_plugins, 1, C1, {project_plugins, []}),
+C2.
