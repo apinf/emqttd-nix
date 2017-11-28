@@ -7,7 +7,7 @@ let image = {dockerTools, callPackage, ...}:
   in dockerTools.buildImage {
     name = "apinf/emqttd";
     tag = "latest";
-    contents = [ apinfEmqttd pkgs.coreutils pkgs.gawk pkgs.gnused pkgs.bash];
+    contents = [ apinfEmqttd pkgs.coreutils pkgs.gawk pkgs.gnused pkgs.bash pkgs.utillinux];
     runAsRoot = ''
       #!${stdenv.shell}
       ${dockerTools.shadowSetup}
