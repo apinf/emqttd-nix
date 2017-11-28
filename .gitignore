@@ -1,0 +1,2 @@
+# Nix creates symlinks on sucessful build by default
+/result*
