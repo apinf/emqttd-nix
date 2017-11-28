@@ -255,6 +255,30 @@ let rebarScript = ./rebar-delete-deps.erl.script;
         # better be explicit rather than relying on transitive dep. 
         beamDeps = with self; [gen_logger lager];
       };
+      "emqttc" = buildRebar3 rec {
+        name = "emqttc";
+        version = "d43c110f7f39a8faa3d38f781638639f01fc6cb0";
+        src = fetchFromGitHub {
+          owner = "emqtt";
+          repo = "emqttc";
+          rev = version;
+          sha256 = "13ldr68jrx114g2j7iffa6baqj9bn2flrgccqhciwibpzvlmm3rg";
+        };
+        beamDeps = with self; [gen_logger];
+        patchPhase = removeRebarDeps;
+      };
+      "mqtt_bridge" = buildMix rec {
+        name = "mqtt_bridge";
+        version = "13e2bccff2ee9846cb6490f33418512d3d26a032";
+        src = fetchFromGitHub {
+          owner = "apinf";
+          repo = "mqtt-bridge";
+          rev = version;
+          sha256 = "0v275y4p5cvb0hqwrs5pis3pfsnmrs49mx9mb3q24cb9mbpqmn9f";
+        };
+        beamDeps = with self; [emqttc goldrush];
+      };
+
       "gen_logger" = buildRebar3 rec {
         name = "gen_logger";
         version = "f6e9f2f373d99f41ffe0579ab5a5f3b19472c9c5";

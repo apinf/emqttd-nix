@@ -3,7 +3,7 @@
 with pkgs;
 
 let image = {dockerTools, callPackage, ...}:
-  let apinfEmqttd = callPackage ./default.nix {};
+  let apinfEmqttd = (callPackage ./default.nix {}).apinfEmqttd;
   in dockerTools.buildImage {
     name = "apinf/emqttd";
     tag = "latest";
