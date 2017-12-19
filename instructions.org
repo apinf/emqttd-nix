@@ -1,0 +1,96 @@
+* Getting Started:
+   The quickest way to run everything is via docker-compose. A compose file is provided which bundles emqttd along with elasticsearch logger and auth_pgsql modules enabled. 
+
+   #+BEGIN_SRC sh
+   cd docker-compose
+   docker-compose up
+   #+END_SRC
+   
+   This will also run elasticsearch, postgresql and postgrest(which provides a REST interface to postgres) populated with default values. Note that there may be start order issues at times, we are working on improving appropriate waiting and retry strategies.
+   To prevent startup order issues, you can run
+
+   #+BEGIN_SRC sh
+   docker-compose up postgres
+   docker-compose up postgrest
+   docker-compose up elasticsearch
+   docker-compose up emqttd
+   docker-compose up mqtt_bridge
+   #+END_SRC
+
+   NOTE: This docker-compose setup is for a test instance and exposes postgres and elasticsearch to the outside world. Do not run in production!!
+   
+   Next, you'd want to configure the ACL rules, which are stored in postgres. This setup allows for dynamic configuration of ACL rules.
+
+* Authentication and ACL rules
+** Setting up Authentication:
+    The src_sh{emq_auth_pgsql.conf} file in src_sh{docker-compose/config/plugins} allows you to configure both authentication and ACL.
+    This is very flexible as you can directly edit the queries that will run in postgres.
+    
+***   Breaking down a query:
+      #+BEGIN_SRC sh
+      auth.pgsql.auth_query = select password,salt from mqtt_user where username = '%u' and (ipaddr = '%a' or ipaddr = '$all') and (clientid = '%c' or clientid is NULL) limit 1
+      #+END_SRC
+      
+      Users can either be anonymous, or they can have a username or password. The password can be stored in the db plain or salted. The mqtt_user table contains the authentication date.
+      e.g 
+      #+BEGIN_SRC sh
+      auth.pgsql.password_hash = salt, sha256
+      #+END_SRC
+      
+      The wildcards %u, %c, and %a are automatically replaced by the user's username, clientid, and ip address before the query is executed.
+      For every mqtt connection, this query is then executed against our postgres db. In case the user supplies a username/password, and the hashed,salted password in our db matches the supplied one, then this query will return the password and the salt. This means that the authentication was a success.
+      In case there is no password or the password doesn't match, the user will be treated as an anonymous user.
+      
+      ACL rules can be setup separately for authenticated and anonymous users.
+
+      In addition, our example query also checks for the ip address. In case a user is allowed to connect from all locations, the mqtt_user table will have ipaddr column value as '$all'. In case he's only allowed from a single IP address, the ipaddr column will have the corresponding IP address.
+      For both cases, our query checks if the user's IP is allowed to authenticate or not.
+
+      These queries can be made as complex as the business requirements dictate.
+
+** Setting up ACL:
+    
+    The ACL setup is handled by a query similar to the auth_query above. 
+
+    #+BEGIN_SRC sh
+    auth.pgsql.acl_query = select allow, ipaddr, username, clientid, access, topic from mqtt_acl where ipaddr = '%a' or username = '%u' or username = '$all' or clientid = '%c
+    #+END_SRC
+    
+    The mqtt_acl table contains the ACL data, with allow, ipaddr, username, clientid, access, and topic as the columns.
+    For each row:
+    The allow column can be 0 or 1, for denial and acceptance respectively.
+    The access column can be 1,2,3 for subscribe, publish, and pubsub respectively.
+    The topic column can have any mqtt topic that matches, (e.g # matches all topics). If you want exact match with the topic name, then "eq <<topicname>>" works.
+    In case all users are to be allowed or denied from a certain topic, username should have '$all'. Otherwise, it should have a specific username.
+    
+** Editing auth and ACL
+*** via pg_cli: 
+*** via postgrest:
+     
+* Publishing and subscribing to messages:
+  Any standard mqtt client works for publishing and subscribing to messages from emqttd.
+  e.g mosquitto is a command-line client that will do the job.
+
+  #+BEGIN_SRC sh
+  mosquitto_sub -h "84.20.148.204" -u "username" -P "password"  -t "#"
+  #+END_SRC
+  
+* Viewing and searching for messages - elasticsearch
+   The bundled elastic_search logger in the docker-compose logs all messages to elasticsearch for persistence.
+   One way is to use an Elastic search client. Chrome has Elastic Search Head in the store. By using that chrome extension, you can easily view ES messages. After instaling the extension, enter this to connect dialog: http://84.20.148.204:9200/ (or what ever address where the service is running). If the service is running ok, you should see messages under “browse” tab, and do searches under Structures Query tab.
+   
+   All messages are stored in the mqtt index.
+
+* Using the bridge
+   The docker-compose setup also bundles an mqtt_bridge. The bridge is able to subscribe to messages from one broker and publish to another, even under another topic tree.
+   The included mqtt_bridge.conf is self-explanatory.
+
+* Building emqttd from scratch:
+   The docker-compose file uses an emqttd docker image from docker-hub. To instead build emqttd from scratch, you'd need nix.
+   Ensure [[nix][https://nixos.org/nix/]] is installed, and run src_sh{nix-build} to build emqttd. This version is expected to be run in a container.
+   
+   src_sh{nix-build docker.nix} will build a docker image. Note that this does not require docker to be installed on the machine.
+
+   A path that looks similar to src_sh{/nix/store/inxac5930nz66gsx64wvx8hh78bfaayv-docker-image-apinf-emqttd.tar.gz} will be printed at the end, if the build was succesful. This is an archive in the docker save format, and can be transferred to the production machines or distributed using container registries.
+
+   To load the image into a local docker daemon, run src_sh{docker load -i <path-to-image>}.
